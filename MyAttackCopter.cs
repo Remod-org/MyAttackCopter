@@ -57,7 +57,7 @@ using Network;
 
 namespace Oxide.Plugins
 {
-    [Info("My Attack Copter", "RFC1920", "0.1.0")]
+    [Info("My Attack Copter", "RFC1920", "0.1.1")]
     [Description("Spawn an Attack Helicopter")]
     internal class MyAttackCopter : RustPlugin
     {
@@ -1334,7 +1334,7 @@ namespace Oxide.Plugins
                     return;
                 }
                 _attackcopter = GetComponent<AttackHelicopter>();
-                _engineController = _attackcopter.gameObject.GetComponent<VehicleEngineController<AttackHelicopter>>();
+                _engineController = GetComponent<VehicleEngineController<AttackHelicopter>>();
             }
 
             public void ToggleHover()
@@ -1443,7 +1443,7 @@ namespace Oxide.Plugins
                 {
                     StopHover();
                 }
-                else if (_engineController.IsOff && isHovering && !Instance.configData.Global.HoverWithoutEngine)
+                else if (_engineController != null && _engineController.IsOff && isHovering && !Instance.configData.Global.HoverWithoutEngine)
                 {
                     StopHover();
                 }

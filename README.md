@@ -13,7 +13,7 @@ Uses: NoEscape (optional)
 - `myattackcopter.admin`  -- Allows an admin to run console commands (may change)
 - `myattackcopter.cooldown` -- Adds a cooldown to player
 - `myattackcopter.unlimited` -- Player can fly without fuel usage (will need to add at least 1 LGF unless "Allow unlimited to use fuel tank" is set to false)
-- `myattackcopter.hover` -- Player can enable or disable hover mode
+- `myattackcopter.canhover` -- Player can enable or disable hover mode
 
 ## Chat Commands
 

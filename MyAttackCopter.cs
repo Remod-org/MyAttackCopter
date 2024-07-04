@@ -43,21 +43,19 @@
     SOFTWARE.
  */
 #endregion
-using UnityEngine;
-using System.Collections.Generic;
 using Oxide.Core;
-using System;
-using System.Linq;
-using Oxide.Core.Plugins;
-using System.Text;
 using Oxide.Core.Libraries.Covalence;
+using Oxide.Core.Plugins;
+using System;
 using System.Collections;
-using ProtoBuf;
-using Network;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("My Attack Copter", "RFC1920", "0.1.1")]
+    [Info("My Attack Copter", "RFC1920", "0.1.2")]
     [Description("Spawn an Attack Helicopter")]
     internal class MyAttackCopter : RustPlugin
     {
@@ -134,32 +132,19 @@ namespace Oxide.Plugins
                     hovers.Add(attackCopter.GetInstanceID(), attackCopter.gameObject.AddComponent<Hovering>());
                 }
 
-                StorageContainer fuelCan = attackCopter?.GetFuelSystem().fuelStorageInstance.Get(true);
+                IFuelSystem fuelCan = attackCopter?.GetFuelSystem();
                 if (permission.UserHasPermission(playerAttack.Key.ToString(), AttackcopterUnlimited) || (vip && vipsettings.unlimited))
                 {
                     attackCopter.fuelPerSec = 0f;
-                    if (fuelCan?.IsValid() == true)
+                    if (fuelCan != null)
                     {
-                        if (fuelCan?.inventory.IsEmpty() != true)
+                        if (!fuelCan.HasFuel())
                         {
                             DoLog($"Setting fuel for AttackCopter {playerAttack.Value} owned by {playerAttack.Key}.");
-                            ItemManager.CreateByItemID(-946369541, 1)?.MoveToContainer(fuelCan?.inventory);
-                            fuelCan?.inventory.MarkDirty();
-                        }
-
-                        // Default for unlimited fuel
-                        fuelCan?.SetFlag(BaseEntity.Flags.Locked, true);
-                        if (configData.Global.allowFuelIfUnlimited || (vip && vipsettings.canloot))
-                        {
-                            fuelCan?.SetFlag(BaseEntity.Flags.Locked, false);
+                            fuelCan?.AddFuel(1);
                         }
                     }
                     continue;
-                }
-                else
-                {
-                    // Done here in case player's unlimited permission was revoked.
-                    fuelCan?.SetFlag(BaseEntity.Flags.Locked, false);
                 }
                 attackCopter.fuelPerSec = vip ? vipsettings.stdFuelConsumption : configData.Global.stdFuelConsumption;
             }
@@ -177,10 +162,10 @@ namespace Oxide.Plugins
 
             AddCovalenceCommand("myheli", "SpawnMyAttackcopterCommand");
             AddCovalenceCommand("noheli", "KillMyAttackcopterCommand");
-            AddCovalenceCommand("gheli",  "GetMyAttackMyCopterCommand");
-            AddCovalenceCommand("wheli",  "WhereisMyAttackMyCopterCommand");
+            AddCovalenceCommand("gheli", "GetMyAttackMyCopterCommand");
+            AddCovalenceCommand("wheli", "WhereisMyAttackMyCopterCommand");
             AddCovalenceCommand("reheli", "ReSpawnMyAttackcopterCommand");
-            AddCovalenceCommand("hheli",  "HoverMyAttackcopterCommand");
+            AddCovalenceCommand("hheli", "HoverMyAttackcopterCommand");
 
             permission.RegisterPermission(AttackcopterSpawn, this);
             permission.RegisterPermission(AttackcopterFetch, this);
@@ -252,6 +237,29 @@ namespace Oxide.Plugins
                 {"NotInHelicopter", "Vous n'êtes pas dans un attack hélicoptère" },
                 {"NoPassengerToggle", "Les passagers ne peuvent pas basculer en vol stationnaire" }
             }, this, "fr");
+        }
+
+        private object CanLootEntity(BasePlayer player, StorageContainer container)
+        {
+            if (player?.userID == 0) return null;
+            Minicopter mini = container.GetParentEntity() as Minicopter;
+            if (mini != null)
+            {
+                Puts("This is a mini");
+                if (storedData.playerattackID.ContainsKey(player.userID) && mini?.net.ID.Value == storedData.playerattackID[player.userID].Value)
+                {
+                    Puts("...and this is one of ours");
+                    GetVIPSettings(player, out VIPSettings vipsettings);
+                    bool unlimited = permission.UserHasPermission(player.UserIDString, AttackcopterUnlimited) || vipsettings.unlimited;
+                    if (!(unlimited && configData.Global.allowFuelIfUnlimited))
+                    {
+                        Message(player.IPlayer, "NoPermMsg");
+                        return true;
+                    }
+                }
+                return null;
+            }
+            return null;
         }
 
         private void OnPlayerInput(BasePlayer player, InputState input)
@@ -510,13 +518,14 @@ namespace Oxide.Plugins
                                 mounted.DismountObject();
                                 mounted.MovePosition(player_pos);
                                 mounted.SendNetworkUpdateImmediate(false);
-                                mounted.ClientRPCPlayer(null, bplayer, "ForcePositionTo", player_pos);
+                                mounted.ClientRPC(RpcTarget.Player("ForcePositionTo", bplayer), player_pos);
                                 mountPointInfo.mountable._mounted = null;
                             }
                         }
                     }
                     Vector3 newLoc = new Vector3(bplayer.transform.position.x + 2f, bplayer.transform.position.y + 2f, bplayer.transform.position.z + 2f);
                     foundent.transform.position = newLoc;
+
                     Message(player, "FoundMsg", newLoc);
                 }
             }
@@ -713,7 +722,7 @@ namespace Oxide.Plugins
             // Make straight perpendicular to up axis so we don't spawn into ground or above player's head.
             Vector3 straight = Vector3.Cross(Vector3.Cross(Vector3.up, forward), Vector3.up).normalized;
             Vector3 position = player.transform.position + (straight * 5f);
-            position.y = player.transform.position.y + 2.5f;
+            position.y = player.transform.position.y + 1.5f;
 
             if (position == default(Vector3)) return;
             BaseVehicle vehicleAttack = (BaseVehicle)GameManager.server.CreateEntity(prefab, position, new Quaternion());
@@ -721,6 +730,7 @@ namespace Oxide.Plugins
             vehicleAttack.OwnerID = player.userID;
 
             AttackHelicopter attackCopter = vehicleAttack as AttackHelicopter;
+            //attackCopter.gameObject.AddComponent<HeliMod>();
 
             vehicleAttack.Spawn();
             if (permission.UserHasPermission(player.UserIDString, AttackcopterCanHover))
@@ -736,23 +746,21 @@ namespace Oxide.Plugins
                 {
                     // If the player is not allowed to use the fuel container, add 1 fuel so the copter will start.
                     // Also lock fuel container since there is no point in adding/removing fuel
-                    StorageContainer fuelCan = attackCopter?.GetFuelSystem().fuelStorageInstance.Get(true);
-                    if (fuelCan?.IsValid() == true)
+                    IFuelSystem fuelCan = attackCopter?.GetFuelSystem();
+                    if (fuelCan != null)
                     {
-                        ItemManager.CreateByItemID(-946369541, 1)?.MoveToContainer(fuelCan.inventory);
-                        fuelCan.inventory.MarkDirty();
-                        fuelCan.SetFlag(BaseEntity.Flags.Locked, true);
+                        fuelCan?.AddFuel(1);
+                        // LOCKED by CanLootEntity hook
                     }
                 }
             }
             else if (configData.Global.startingFuel > 0 || (vip && vipsettings.startingFuel > 0))
             {
-                StorageContainer fuelCan = attackCopter?.GetFuelSystem().fuelStorageInstance.Get(true);
-                if (fuelCan?.IsValid() == true)
+                IFuelSystem fuelCan = attackCopter?.GetFuelSystem();
+                if (fuelCan != null)
                 {
                     float sf = vip ? vipsettings.startingFuel : configData.Global.startingFuel;
-                    ItemManager.CreateByItemID(-946369541, Convert.ToInt32(sf))?.MoveToContainer(fuelCan.inventory);
-                    fuelCan.inventory.MarkDirty();
+                    fuelCan.AddFuel((int)sf);
                 }
             }
             else
@@ -773,7 +781,7 @@ namespace Oxide.Plugins
         }
 
         // Kill attackcopter hook
-        private void KillMyAttackcopterPlease(BasePlayer player, bool killalways=false)
+        private void KillMyAttackcopterPlease(BasePlayer player, bool killalways = false)
         {
             bool foundcopter = false;
             VIPSettings vipsettings;
@@ -827,7 +835,7 @@ namespace Oxide.Plugins
         {
             if (configData.Global.useNoEscape && NoEscape)
             {
-                return (bool) NoEscape?.CallHook("IsRaidBlocked", player);
+                return (bool)NoEscape?.CallHook("IsRaidBlocked", player);
             }
             return false;
         }
@@ -1115,7 +1123,7 @@ namespace Oxide.Plugins
             if (configData.Global.useClans && Clans != null)
             {
                 string playerclan = (string)Clans?.CallHook("GetClanOf", playerid);
-                string ownerclan  = (string)Clans?.CallHook("GetClanOf", ownerid);
+                string ownerclan = (string)Clans?.CallHook("GetClanOf", ownerid);
                 if (playerclan == ownerclan && playerclan != null && ownerclan != null)
                 {
                     return true;
@@ -1381,7 +1389,7 @@ namespace Oxide.Plugins
             {
                 if (Instance.configData.Global.TimedHover) _timedHoverTimer = Instance.timer.Once(Instance.configData.Global.HoverDuration, () => StopHover());
 
-                EntityFuelSystem fuelSystem = _attackcopter?.GetFuelSystem();
+                IFuelSystem fuelSystem = _attackcopter?.GetFuelSystem();
                 /* Using GetDriver, the engine will begin stalling and then die in a few seconds if the playerowner moves to the passenger seat.
                  * - The engine stops mid-air, which is not realistic.
                  * - The playerowner can move back and the engine should start again.
@@ -1457,5 +1465,26 @@ namespace Oxide.Plugins
             }
         }
         #endregion
+        public class HeliMod : FacepunchBehaviour
+        {
+            AttackHelicopter heli;
+
+            public void Awake()
+            {
+                heli = GetComponent<AttackHelicopter>();
+            }
+
+            public void Update()
+            {
+                if (heli == null) return;
+                if (heli.IsFlipped())
+                {
+                    Debug.LogWarning($"Correcting upright status: {heli.transform.rotation.w}");
+                    // Flip it over if flipped
+                    Quaternion q = Quaternion.FromToRotation(heli.transform.up, Vector3.up) * heli.transform.rotation;
+                    heli.transform.rotation = Quaternion.Slerp(heli.transform.rotation, q, Time.deltaTime * 3.5f);
+                }
+            }
+        }
     }
 }

@@ -55,7 +55,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("My Attack Copter", "RFC1920", "0.1.2")]
+    [Info("My Attack Copter", "RFC1920", "1.0.1")]
     [Description("Spawn an Attack Helicopter")]
     internal class MyAttackCopter : RustPlugin
     {
@@ -264,8 +264,9 @@ namespace Oxide.Plugins
 
         private void OnPlayerInput(BasePlayer player, InputState input)
         {
-            if (player?.userID.IsSteamId() != true || input == null) return;
             if (!configData.Global.UseKeystrokeForHover) return;
+            if (!input.IsValidEntityReference()) return;
+            if (player?.userID.IsSteamId() != true || input == null) return;
             if (!permission.UserHasPermission(player.UserIDString, AttackcopterCanHover)) return;
             //if (input.current.buttons > 0) Puts($"OnPlayerInput: {input.current.buttons}");
             if (!player.isMounted) return;

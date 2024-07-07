@@ -55,7 +55,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("My Attack Copter", "RFC1920", "1.0.2")]
+    [Info("My Attack Copter", "RFC1920", "1.0.3")]
     [Description("Spawn an Attack Helicopter")]
     internal class MyAttackCopter : RustPlugin
     {
@@ -250,6 +250,7 @@ namespace Oxide.Plugins
                     GetVIPSettings(player, out VIPSettings vipsettings);
                     bool vip = vipsettings != null;
                     bool unlimited = permission.UserHasPermission(player.UserIDString, AttackcopterUnlimited) || (vip && vipsettings.unlimited);
+                    if (!unlimited) return null;
                     if (!(unlimited && configData.Global.allowFuelIfUnlimited))
                     {
                         Message(player.IPlayer, "NoPermMsg");
